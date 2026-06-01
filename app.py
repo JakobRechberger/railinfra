@@ -1,3 +1,5 @@
+import json
+
 from flask import (
     Flask, request, session, redirect,
     url_for, render_template
@@ -18,6 +20,19 @@ ACCOUNTS = {
     "operator":   {"password": "operator123",   "role": "operator"},
     "supervisor": {"password": "supervisor123",  "role": "supervisor"},
 }
+SWITCHES = [
+    {"id": "SW-1", "location": "Factory siding A",  "state": "NORMAL"},
+    {"id": "SW-2", "location": "DB InfraGo junction","state": "NORMAL"},
+    {"id": "SW-3", "location": "Depot entry",         "state": "DIVERGE"},
+    {"id": "SW-4", "location": "Factory siding B",    "state": "IDLE"},
+]
+SIGNALS = [
+    {"id":"SIG-A", "location": "DB InfraGo junction", "state": "HALT"},
+    {"id":"SIG-B", "location": "Depot Entry", "state": "GO"},
+    {"id":"SIG-C", "location": "Factory siding A", "state": "GO"},
+    {"id":"SIG-D", "location": "Factory siding B", "state": "HALT"},
+    {"id":"SIG-E", "location": "Endpoint", "state": "HALT"},
+]
 
 USER_FLAG = "FLAG{s3ss10n_h1j4ck_succ3ss}"
 
@@ -136,6 +151,24 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
+# Add this to SWITCHES constant at the top of app.py (or derive from DB later
+
+# Add this route to app.py
+@app.route("/track-map", methods=["GET"])
+def track_map():
+    guard = require_auth("operator")
+    if guard:
+        return guard
+    username, role = get_session_user()
+    return render_template(
+        "track_map.html",
+        username=username,
+        role=role,
+        signals=SIGNALS,
+        signals_json = json.dumps(SIGNALS),
+        switches=SWITCHES,
+        switches_json=json.dumps(SWITCHES),
+    )
 
 # ---------------------------------------------------------------------------
 # Dev entry point

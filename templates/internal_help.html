@@ -25,7 +25,7 @@
       <a href="{{ url_for('dashboard') }}" class="nav-item">
         <i class="ti ti-layout-dashboard" aria-hidden="true"></i> Overview
       </a>
-      <a href="#" class="nav-item">
+      <a href="{{ url_for('track_map') }}" class="nav-item">
         <i class="ti ti-route" aria-hidden="true"></i> Track map
       </a>
       <a href="#" class="nav-item">
@@ -212,9 +212,23 @@
 
 <script>
   (function tick() {
+    const now = new Date();
+
+    const formatted = now.toLocaleString("de-DE", {
+        timeZone: "Europe/Berlin",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false
+    });
+
     document.getElementById("footer-time").textContent =
-      new Date().toISOString().replace("T", " ").substring(0, 19) + " UTC";
+        `${formatted} MESZ`;
+
     setTimeout(tick, 1000);
-  })();
+})();
 </script>
 {% endblock %}

@@ -24,6 +24,9 @@
   --green-text: #3B6D11;
   --green-bdr:  #C0DD97;
 
+  --red-text: #C1121C;
+  --red-bg: #FFC6C4;
+
   --amber-bg:   #FAEEDA;
   --amber-text: #854F0B;
 
@@ -141,7 +144,7 @@ html, body {
 .pill-ok     { background: var(--green-bg); color: var(--green-text); }
 .pill-active { background: var(--amber-bg); color: var(--amber-text); }
 .pill-idle   { background: var(--bg-page); color: var(--text-muted); border: 1px solid var(--border); }
-
+.pill-halt   { background: var(--red-bg); color: var(--red-text); }
 /* ── Content area with sidebar ── */
 .content {
   display: flex;
