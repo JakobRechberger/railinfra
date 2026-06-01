@@ -1,10 +1,56 @@
 {% extends "base.html" %}
-{% block content %}
-<h1>RailInfra Signalling Dashboard</h1>
-<form method="POST" action="{{ url_for('login') }}{{ '?debug=true' if request.args.get('debug') == 'true' else '' }}">
-  {% if error %}<p class="error">{{ error }}</p>{% endif %}
-  <label>Username <input type="text" name="username"></label>
-  <label>Password <input type="password" name="password"></label>
-  <button type="submit">Login</button>
-</form>
+{% block title %}Sign in — RailInfra{% endblock %}
+
+{% block body %}
+<div class="login-page">
+
+  <div class="login-logo">
+    <div class="login-logo-icon">
+      <i class="ti ti-arrows-split" aria-hidden="true"></i>
+    </div>
+    <span class="login-logo-text">RailInfra GmbH</span>
+  </div>
+
+  <div class="login-card">
+    <p class="login-card-title">Signalling Dashboard</p>
+    <p class="login-card-sub">Authenticated access only — internal use</p>
+
+    {% if error %}
+    <div class="error-msg">
+      <i class="ti ti-alert-circle" aria-hidden="true"></i>
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('login') }}{% if request.args.get('debug') == 'true' %}?debug=true{% endif %}">
+      <div class="form-field">
+        <label class="form-label" for="username">Username</label>
+        <div class="input-icon">
+          <i class="ti ti-user" aria-hidden="true"></i>
+          <input type="text" id="username" name="username" autocomplete="username">
+        </div>
+      </div>
+
+      <div class="form-field" style="margin-bottom: 1.5rem;">
+        <label class="form-label" for="password">Password</label>
+        <div class="input-icon">
+          <i class="ti ti-lock" aria-hidden="true"></i>
+          <input type="password" id="password" name="password"  autocomplete="current-password">
+        </div>
+      </div>
+
+      <button type="submit" class="btn-full">Sign in →</button>
+    </form>
+
+    <hr class="divider">
+
+    <div class="status-row">
+      <span class="dot-green"></span>
+      All signal systems nominal
+    </div>
+  </div>
+
+  <p class="login-version">ESTW Control System v2.4.1 — Private Network</p>
+
+</div>
 {% endblock %}
