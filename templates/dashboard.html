@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Signalling Dashboard</h1>
+<p>Logged in as: {{ username }} ({{ role }})</p>
+
+<!-- XSS sink: signal_banner is rendered unescaped intentionally -->
+<div id="signal-banner">Monitoring: {{ signal_banner | safe }}</div>
+
+<form method="POST" action="/signal">
+  <label>Signal Name <input type="text" name="signal_name"></label>
+  <button type="submit">Update</button>
+</form>
+
+<a href="/logout">Logout</a>
+{% endblock %}

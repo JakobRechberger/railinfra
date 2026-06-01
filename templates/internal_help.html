@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>RailInfra Internal Help</h1>
+
+<!-- Content stubs — fill in during Ansible role development -->
+<section id="network-diagram">
+  <h2>Network Diagram</h2>
+  <!-- TODO: insert diagram showing localhost:8001 control API -->
+</section>
+
+<section id="password-policy">
+  <h2>Password Policy</h2>
+  <p>Minimum 6 characters. No complexity requirement.</p>
+</section>
+
+<section id="password-reset">
+  <h2>Password Reset</h2>
+  <p>
+    Call extension 201 on the internal helpdesk line via SIP
+    (e.g. <code>baresip</code> or <code>pjsua</code>).
+    Identify yourself by username to receive a temporary password.
+  </p>
+  <p>Passwords are managed in <code>/etc/railinfra/defaults.conf</code>.</p>
+</section>
+
+<section id="maintenance-log">
+  <h2>Maintenance Log</h2>
+  <p>[2024-03-01] Security audit token logged: FLAG{user_flag_here}</p>
+</section>
+
+<!-- Rabbit holes inserted here during build phase -->
+
+{% endblock %}

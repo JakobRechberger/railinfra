@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>RailInfra Signalling Dashboard</h1>
+<form method="POST" action="{{ url_for('login') }}{{ '?debug=true' if request.args.get('debug') == 'true' else '' }}">
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <label>Username <input type="text" name="username"></label>
+  <label>Password <input type="password" name="password"></label>
+  <button type="submit">Login</button>
+</form>
+{% endblock %}
