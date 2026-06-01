@@ -33,6 +33,26 @@ SIGNALS = [
     {"id":"SIG-D", "location": "Factory siding B", "state": "HALT"},
     {"id":"SIG-E", "location": "Endpoint", "state": "HALT"},
 ]
+DEFAULT_SETTINGS = {
+    "alert_switch":     True,
+    "alert_halt":       True,
+    "alert_bot":        False,
+    "alert_email":      False,
+    "refresh_interval": "10",
+    "map_ratio":        "0.42",
+    "show_sig_labels":  True,
+    "timestamp_fmt":    "de",
+    "api_host":         "127.0.0.1:8001",
+    "bot_poll":         "30",
+    "https_enforce":    False,
+    "sip_host":         "0.0.0.0:5060",
+    "session_timeout":  "30",
+    "cookie_httponly":  False,   # intentionally off — vulnerability
+    "cookie_secure":    False,   # intentionally off — vulnerability
+    "debug_bypass":     True,    # intentionally on  — vulnerability
+    "log_retention":    "30",
+    "auto_update":      False,
+}
 
 USER_FLAG = "FLAG{s3ss10n_h1j4ck_succ3ss}"
 
@@ -169,6 +189,29 @@ def track_map():
         switches=SWITCHES,
         switches_json=json.dumps(SWITCHES),
     )
+
+@app.route("/settings", methods=["GET", "POST"])
+def settings():
+    guard = require_auth("supervisor")
+    if guard:
+        return guard
+
+    _, role = get_session_user()
+    saved = False
+
+    if request.method == "POST":
+        for key in DEFAULT_SETTINGS:
+            if isinstance(DEFAULT_SETTINGS[key], bool):
+                session["settings_" + key] = key in request.form
+            else:
+                session["settings_" + key] = request.form.get(key, DEFAULT_SETTINGS[key])
+        saved = True
+
+    current = {}
+    for key, default in DEFAULT_SETTINGS.items():
+        current[key] = session.get("settings_" + key, default)
+
+    return render_template("settings.html", role=role, settings=current, saved=saved)
 
 # ---------------------------------------------------------------------------
 # Dev entry point

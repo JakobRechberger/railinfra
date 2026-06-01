@@ -37,8 +37,8 @@
       </a>
       <p class="nav-section">System</p>
       {% if role == "supervisor" %}
-      <a href="#" class="nav-item">
-        <i class="ti ti-settings" aria-hidden="true"></i> Configuration
+      <a href="{{ url_for('settings') }}" class="nav-item">
+        <i class="ti ti-help" aria-hidden="true"></i> Configuration
       </a>
       <a href="{{ url_for('internal_help') }}" class="nav-item">
         <i class="ti ti-help" aria-hidden="true"></i> Internal help
