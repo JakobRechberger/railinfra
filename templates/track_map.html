@@ -32,13 +32,13 @@
       <a href="{{ url_for('track_map') }}" class="nav-item active">
         <i class="ti ti-route" aria-hidden="true"></i> Track map
       </a>
-      <a href="#" class="nav-item">
+      <a href="{{url_for('signal_log')}}" class="nav-item">
         <i class="ti ti-activity" aria-hidden="true"></i> Signal log
       </a>
       <p class="nav-section">System</p>
       {% if role == "supervisor" %}
       <a href="{{ url_for('settings') }}" class="nav-item">
-        <i class="ti ti-help" aria-hidden="true"></i> Configuration
+        <i class="ti ti-settings" aria-hidden="true"></i> Configuration
       </a>
       <a href="{{ url_for('internal_help') }}" class="nav-item">
         <i class="ti ti-help" aria-hidden="true"></i> Internal help
@@ -106,13 +106,18 @@
                 <div style="font-size:11px; font-weight:500; color:var(--text-primary);">{{ sw.id }}</div>
                 <div style="font-size:10px; color:var(--text-muted); margin-top:1px;">{{ sw.location }}</div>
               </div>
-              {% if sw.state == 'NORMAL' %}
-                <span class="pill pill-ok">{{ sw.state }}</span>
-              {% elif sw.state == 'DIVERGE' %}
-                <span class="pill pill-active">{{ sw.state }}</span>
-              {% else %}
-                <span class="pill pill-idle">{{ sw.state }}</span>
-              {% endif %}
+              <div style="display:flex; align-items:center; gap:6px;">
+                {% if sw.state == "STRAIGHT" or sw.state == "DIVERGE" %}
+                  <span class="pill pill-active">{{ sw.state }}</span>
+                {% else %}
+                  <span class="pill pill-idle">{{ sw.state }}</span>
+                {% endif %}
+                {% if sw.status == 'OK' %}
+                  <span class="pill pill-ok">{{ sw.status }}</span>
+                {% else %}
+                  <span class="pill pill-idle">{{ sw.status }}</span>
+                {% endif %}
+              </div>
             </div>
             {% endfor %}
 
@@ -175,7 +180,7 @@
   var sigNodes = [];
 
   function stateColor(s) {
-    if (s === 'NORMAL')  return '#3B6D11';
+    if (s === 'STRAIGHT')  return '#3B6D11';
     if (s === 'DIVERGE') return '#854F0B';
     return '#9b9b96';
   }
@@ -378,24 +383,42 @@
       .catch(function() {});
   }, 10000);
 })();
-(function tick() {
-    const now = new Date();
+const fmt = "{{ timestamp_fmt }}";
 
-    const formatted = now.toLocaleString("de-DE", {
-        timeZone: "Europe/Berlin",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false
-    });
+function tick() {
+  const el = document.getElementById("footer-time");
+  if (!el) return;
 
-    document.getElementById("footer-time").textContent =
-        `${formatted} MESZ`;
+  const now = new Date();
 
-    setTimeout(tick, 1000);
-})();
+  let out;
+
+  if (fmt === "utc") {
+    out = now.toISOString().replace("T", " ").substring(0, 19) + " UTC";
+  }
+
+  else if (fmt === "iso") {
+    out = now.toISOString();
+  }
+
+  else {
+    out = now.toLocaleString("de-DE", {
+      timeZone: "Europe/Berlin",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    }) + " MESZ";
+  }
+
+  el.textContent = out;
+  setTimeout(tick, 1000);
+}
+
+tick();
+
 </script>
 {% endblock %}

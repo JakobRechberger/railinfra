@@ -28,15 +28,15 @@
       <a href="{{ url_for('track_map') }}" class="nav-item">
         <i class="ti ti-route" aria-hidden="true"></i> Track map
       </a>
-      <a href="#" class="nav-item">
+      <a href="{{ url_for('signal_log')}}" class="nav-item">
         <i class="ti ti-activity" aria-hidden="true"></i> Signal log
       </a>
       <p class="nav-section">System</p>
       {% if role == "supervisor" %}
       <a href="{{ url_for('settings') }}" class="nav-item">
-        <i class="ti ti-help" aria-hidden="true"></i> Configuration
+        <i class="ti ti-settings" aria-hidden="true"></i> Configuration
       </a>
-      <a href="{{ url_for('internal_help') }}" class="nav-item">
+      <a href="{{ url_for('internal_help') }}" class="nav-item active">
         <i class="ti ti-help" aria-hidden="true"></i> Internal help
       </a>
       {% else %}
@@ -217,10 +217,26 @@
 </div>
 
 <script>
-  (function tick() {
+  const fmt = "{{ timestamp_fmt }}";
+
+  function tick() {
+    const el = document.getElementById("footer-time");
+    if (!el) return;
+
     const now = new Date();
 
-    const formatted = now.toLocaleString("de-DE", {
+    let out;
+
+    if (fmt === "utc") {
+      out = now.toISOString().replace("T", " ").substring(0, 19) + " UTC";
+    }
+
+    else if (fmt === "iso") {
+      out = now.toISOString();
+    }
+
+    else {
+      out = now.toLocaleString("de-DE", {
         timeZone: "Europe/Berlin",
         day: "2-digit",
         month: "2-digit",
@@ -229,12 +245,13 @@
         minute: "2-digit",
         second: "2-digit",
         hour12: false
-    });
+      }) + " MESZ";
+    }
 
-    document.getElementById("footer-time").textContent =
-        `${formatted} MESZ`;
-
+    el.textContent = out;
     setTimeout(tick, 1000);
-})();
+  }
+
+  tick();
 </script>
 {% endblock %}

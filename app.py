@@ -21,17 +21,17 @@ ACCOUNTS = {
     "supervisor": {"password": "supervisor123",  "role": "supervisor"},
 }
 SWITCHES = [
-    {"id": "SW-1", "location": "Factory siding A",  "state": "NORMAL"},
-    {"id": "SW-2", "location": "DB InfraGo junction","state": "NORMAL"},
-    {"id": "SW-3", "location": "Depot entry",         "state": "DIVERGE"},
-    {"id": "SW-4", "location": "Factory siding B",    "state": "IDLE"},
+    {"id": "SW-1", "location": "Factory siding A",  "state": "STRAIGHT", "last_update":"01-06-2026 08:02:11", "status":"OK"},
+    {"id": "SW-2", "location": "DB InfraGo junction","state": "STRAIGHT", "last_update":"01-06-2026 08:02:11", "status":"OK"},
+    {"id": "SW-3", "location": "Depot entry",         "state": "DIVERGE", "last_update":"01-06-2026 08:02:11", "status":"OK"},
+    {"id": "SW-4", "location": "Factory siding B",    "state": "IDLE", "last_update":"01-06-2026 08:02:11", "status":"IDLE"},
 ]
 SIGNALS = [
     {"id":"SIG-A", "location": "DB InfraGo junction", "state": "HALT"},
     {"id":"SIG-B", "location": "Depot Entry", "state": "GO"},
     {"id":"SIG-C", "location": "Factory siding A", "state": "GO"},
-    {"id":"SIG-D", "location": "Factory siding B", "state": "HALT"},
-    {"id":"SIG-E", "location": "Endpoint", "state": "HALT"},
+    {"id":"SIG-D", "location": "Factory siding B", "state": "DISABLED"},
+    {"id":"SIG-E", "location": "Endpoint", "state": "DISABLED"},
 ]
 DEFAULT_SETTINGS = {
     "alert_switch":     True,
@@ -53,6 +53,20 @@ DEFAULT_SETTINGS = {
     "log_retention":    "30",
     "auto_update":      False,
 }
+SIGNAL_LOGS = [
+    {"id": 1,  "date": "01-06-2026 08:02:11", "signal_id": "SIG-A", "location": "Main line entry",    "severity": "INFO",  "content": "State change: HALT → GO",             "raw": "SIGSTATE SIG-A 0x01 08:02:11.042"},
+    {"id": 2,  "date": "01-06-2026 08:14:37", "signal_id": "SIG-D", "location": "Factory B approach", "severity": "WARN",  "content": "State change: GO → HALT",             "raw": "SIGSTATE SIG-D 0x00 08:14:37.118"},
+    {"id": 3,  "date": "01-06-2026 08:14:38", "signal_id": "SW-4",  "location": "Factory siding B",   "severity": "INFO",  "content": "Switch position: NORMAL → DIVERGE",  "raw": "SWPOS SW-4 0x02 08:14:38.004"},
+    {"id": 4,  "date": "01-06-2026 08:51:33", "signal_id": "SW-3",  "location": "Depot entry",        "severity": "INFO",  "content": "Switch position: NORMAL → DIVERGE",  "raw": "SWPOS SW-3 0x02 08:51:33.771"},
+    {"id": 5,  "date": "01-06-2026 09:01:05", "signal_id": "SIG-B", "location": "Junction approach",  "severity": "INFO",  "content": "Heartbeat OK",                        "raw": "HBEAT SIG-B 0xFF 09:01:05.000"},
+    {"id": 6,  "date": "01-06-2026 09:01:05", "signal_id": "SIG-C", "location": "Factory A approach", "severity": "INFO",  "content": "Heartbeat OK",                        "raw": "HBEAT SIG-C 0xFF 09:01:05.001"},
+    {"id": 7,  "date": "01-06-2026 09:01:05", "signal_id": "SIG-E", "location": "Depot approach",     "severity": "INFO",  "content": "Heartbeat OK",                        "raw": "HBEAT SIG-E 0xFF 09:01:05.002"},
+    {"id": 8,  "date": "01-06-2026 09:04:22", "signal_id": "SIG-D", "location": "Factory B approach", "severity": "ERROR", "content": "Controller timeout — no response",    "raw": "TIMEOUT SIG-D 0xEE 09:04:22.500"},
+    {"id": 9,  "date": "01-06-2026 09:04:55", "signal_id": "SIG-D", "location": "Factory B approach", "severity": "INFO",  "content": "Controller reconnected",              "raw": "RECONN SIG-D 0x01 09:04:55.210"},
+    {"id": 10, "date": "01-06-2026 09:14:02", "signal_id": "SW-1",  "location": "Factory siding A",   "severity": "INFO",  "content": "Switch position confirmed: NORMAL",   "raw": "SWPOS SW-1 0x01 09:14:02.033"},
+    {"id": 11, "date": "01-06-2026 09:14:02", "signal_id": "SW-2",  "location": "DB InfraGo junction","severity": "INFO",  "content": "Switch position confirmed: NORMAL",   "raw": "SWPOS SW-2 0x01 09:14:02.041"},
+    {"id": 12, "date": "01-06-2026 09:14:08", "signal_id": "SIG-A", "location": "Main line entry",    "severity": "WARN",  "content": "Bot cycle delayed — 28s (expected 10s)","raw": "BOTCYCLE SIG-A 0xAB 09:14:08.900"},
+]
 
 USER_FLAG = "FLAG{s3ss10n_h1j4ck_succ3ss}"
 
@@ -135,6 +149,12 @@ def dashboard():
         role=role,
         signal_banner=signal_banner,   # rendered with | safe — XSS sink
         bot_cycles=bot_cycles,
+        signals=SIGNALS,
+        signals_json=json.dumps(SIGNALS),
+        switches=SWITCHES,
+        switches_json=json.dumps(SWITCHES),
+        signal_logs=SIGNAL_LOGS,
+        signal_logs_json=json.dumps(SIGNAL_LOGS),
     )
 
 
@@ -164,7 +184,19 @@ def internal_help():
 
     _, role = get_session_user()
     return render_template("internal_help.html", role=role, user_flag=USER_FLAG)
+@app.route("/signal-log", methods=["GET"])
+def signal_log():
+    guard = require_auth("operator")
+    if guard:
+        return guard
 
+    _, role = get_session_user()
+    return render_template("signal_log.html",
+                           role=role,
+                           user_flag=USER_FLAG,
+                           signal_logs=SIGNAL_LOGS,
+                           signal_logs_json=json.dumps(SIGNAL_LOGS),
+                           )
 
 @app.route("/logout", methods=["GET"])
 def logout():
@@ -205,13 +237,19 @@ def settings():
                 session["settings_" + key] = key in request.form
             else:
                 session["settings_" + key] = request.form.get(key, DEFAULT_SETTINGS[key])
+        session.modified = True
         saved = True
 
     current = {}
     for key, default in DEFAULT_SETTINGS.items():
         current[key] = session.get("settings_" + key, default)
-
-    return render_template("settings.html", role=role, settings=current, saved=saved)
+    return render_template(
+        "settings.html",
+        role=role,
+        settings=current,
+        saved=saved,
+        timestamp_fmt=current["timestamp_fmt"]
+    )
 
 # ---------------------------------------------------------------------------
 # Dev entry point

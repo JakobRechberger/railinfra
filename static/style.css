@@ -731,3 +731,9 @@ button.btn-full { width: 100%; padding: 9px; }
   background: #F7C1C1;
   border-color: #E24B4A;
 }
+.btn-details {
+  font-size: 10px;
+  padding: 4px 10px;
+  color: var(--text-muted);
+}
+
